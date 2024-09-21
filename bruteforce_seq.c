@@ -26,6 +26,26 @@ void encrypt(long key, char *ciph, int len) {
     }
 }
 
+char search[] = " the ";
+
+int tryKey(long key, char *ciph, int len) {
+    char temp[len + 1];
+    memcpy(temp, ciph, len);
+    temp[len] = 0;
+    decrypt(key, temp, len);
+    return strstr(temp, search) != NULL;
+}
+
+unsigned char cipher[] = {108, 245, 65, 63, 125, 200, 150, 66, 17, 170, 207, 170, 34, 31, 70, 215, 0};
+
 int main() {
+    int ciphlen = strlen((const char *)cipher);
+    for (long i = 0; i < (1L << 56); ++i) {
+        if (tryKey(i, (char *)cipher, ciphlen)) {
+            printf("Key found: %li\n", i);
+            break;
+        }
+    }
     return 0;
 }
+
