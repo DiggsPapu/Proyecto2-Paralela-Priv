@@ -3,6 +3,7 @@
 #include <string.h>
 #include <mpi.h>
 #include <openssl/des.h>
+#include <omp.h>
 #include <time.h>
 
 void add_padding(unsigned char *input, int *len) {
