@@ -57,11 +57,9 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
-    temp[len] = 0; // Ensure the string is null-terminated
+    temp[len] = 0;
 
     decrypt_message(key, temp, &len);
-    temp[len] = '\0'; // Explicitly null-terminate the decrypted string
-
     if (strstr((char *)temp, search) != NULL) {
         return 1; // Key found
     }
@@ -78,7 +76,7 @@ int main(int argc, char *argv[]) {
     long key = atol(argv[2]);
     char *search = argv[3];
 
-    int N, id, flag;
+    int N, id;
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(comm, &N);
@@ -112,36 +110,33 @@ int main(int argc, char *argv[]) {
     if (id == N - 1) {
         myupper = upper;
     }
-    printf("Process %d is responsible for key range: [%li - %li]\n", id, mylower, myupper);
+
     long found = -1; // Initialize as -1 to indicate that no key has been found
     int key_found = 0; // Flag to indicate if the key is found
     double start_time = MPI_Wtime(); // Start timing
 
     // Loop to search for the key
+    #pragma omp parallel for shared(key_found, found) private(i)
     for (long i = mylower; i <= myupper; ++i) {
-        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
-        if (flag) { // Check if a key has been found
-            MPI_Recv(&key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
-            if (key_found) {
-                break; // Exit if a key has already been found
-            }
-        }
+        // Check if a key has already been found
+        if (key_found) continue;
 
         if (tryKey(i, cipher, ciphlen, search)) {
-            found = i; // Key found
-            key_found = 1; // Set the key_found flag
-            for (int j = 0; j < N; ++j) {
-                MPI_Send(&key_found, 1, MPI_INT, j, 0, comm); // Inform all processes
+            #pragma omp critical
+            {
+                found = i; // Key found
+                key_found = 1; // Set the key_found flag
             }
-            break;
         }
     }
+
+    // Broadcast found key to all processes
+    MPI_Bcast(&found, 1, MPI_LONG, MPI_ROOT, comm);
 
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
         printf("Key found: %li by process %d\n", found, id);
         decrypt_message(found, cipher, &ciphlen);
-        cipher[ciphlen] = '\0'; // Ensure null-terminated string
         printf("Decrypted text: %s\n", cipher);
         printf("Decryption time: %f seconds\n", end_time - start_time);
     }
