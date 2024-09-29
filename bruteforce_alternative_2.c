@@ -57,7 +57,7 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
-    temp[len] = 0;
+    temp[len] = 0; // Ensure the string is null-terminated
 
     decrypt_message(key, temp, &len);
     if (strstr((char *)temp, search) != NULL) {
@@ -66,43 +66,51 @@ int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     return 0; // Key not found
 }
 
-int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int ciphlen, const char *search, int *key_found, long *found, int id, MPI_Comm comm, int N, int flag) {
+int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int ciphlen, const char *search, int *key_found, long *found, int id, MPI_Comm comm, int N) {
     #pragma omp parallel shared(key_found, found)
     {
         int thread_id = omp_get_thread_num(); // Get the current thread ID
         int num_threads = omp_get_num_threads(); // Total number of threads
-        // printf("Process %d, num_threads: %d\n",id, num_threads);
+        int thread_who_found = 0; // Thread that found the key
         long i;
 
         // Each thread will run this loop while key_found is false
         for (long i = mylower + thread_id; i <= myupper; i += num_threads) {
-            // Check if the key has already been found
-            if (*key_found) {
-                break; // Exit the loop if the key has been found
-            }
-
-            // Check for a message from other processes indicating that the key is found
-            int flag;
-            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
-            if (flag) {
-                MPI_Recv(key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
-            }
-            
-            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
+            printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
 
             if (!(*key_found) && tryKey(i, cipher, ciphlen, search)) {
                 #pragma omp critical
                 {
-                    if (!(*key_found)) { // Check again inside the critical section to avoid race conditions
-                        printf("Key found: %li by process %d\n", i, id);
-                        *found = i; // Key found
-                        *key_found = 1; // Set the shared key_found flag
-                        #pragma omp flush(key_found)
-                        for (int j = 0; j < N; ++j) {
-                            MPI_Send(key_found, 1, MPI_INT, j, 0, comm); // Inform all processes
-                        }
-                    }
+                    thread_who_found = thread_id; // Update the thread that found the key
+                    *found = i; // Key found
+                    *key_found = 1; // Set the shared key_found flag
+                    printf("Key found: %li by process %d in thread %d, keyfound %d, %d \n", i, id, thread_id, *key_found, thread_who_found);
                 }
+                for (int j = 0; j < N; ++j) {
+                    MPI_Send(&key_found, 1, MPI_INT, j, 0, comm); // Inform all processes
+                }
+                break;
+            }
+            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
+            // if (thread_who_found!=0){
+            //     printf("Thread %d found the key, process %d\n", thread_who_found, id);
+            // }
+            // Check for a message from other processes indicating that the key is found
+            int flag;
+            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
+            // if (i%1000000 == 0){
+            //     printf("Process %d, thread %d: flag %d\n", id, thread_id, flag);
+            // }
+            if (flag) {
+                MPI_Bcast(key_found, 1, MPI_INT, id, comm);
+                MPI_Recv(key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+                if (*key_found) {
+                    break; // Break if key_found was updated
+                }
+            }
+            // Check if the key has already been found
+            if (*key_found) {
+                break; // Exit the loop if the key has been found
             }
         }
     }
@@ -160,12 +168,13 @@ int main(int argc, char *argv[]) {
     double start_time = MPI_Wtime(); // Start timing
 
     // Call the parallel key search function
-    parallel_key_search(mylower, myupper, cipher, ciphlen, search, &key_found, &found, id, comm, N, flag);
+    parallel_key_search(mylower, myupper, cipher, ciphlen, search, &key_found, &found, id, comm, N);
 
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
         printf("Key found: %li by process %d\n", found, id);
         decrypt_message(found, cipher, &ciphlen);
+        cipher[ciphlen] = '\0'; // Ensure null-terminated string
         printf("Decrypted text: %s\n", cipher);
         printf("Decryption time: %f seconds\n", end_time - start_time);
     }
