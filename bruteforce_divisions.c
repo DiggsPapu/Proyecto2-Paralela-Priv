@@ -47,3 +47,17 @@ void decrypt_message(long key, unsigned char *ciph, int *len) {
     }
     remove_padding(ciph, len);
 }
+
+int tryKey(long key, unsigned char *ciph, int len, const char *search) {
+    unsigned char temp[len + 1];
+    memcpy(temp, ciph, len);
+    temp[len] = 0;
+
+    decrypt_message(key, temp, &len);
+    temp[len] = '\0';
+
+    if (strstr((char *)temp, search) != NULL) {
+        return 1;
+    }
+    return 0;
+}
