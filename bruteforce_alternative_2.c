@@ -6,6 +6,7 @@
 #include <omp.h>
 #include <time.h>
 
+// Function to add padding to the input so that its length is a multiple of 8 bytes
 void add_padding(unsigned char *input, int *len) {
     int padding = 8 - (*len % 8);
     for (int i = 0; i < padding; ++i) {
@@ -14,15 +15,18 @@ void add_padding(unsigned char *input, int *len) {
     *len += padding;
 }
 
+// Function to remove padding from the decrypted message
 void remove_padding(unsigned char *input, int *len) {
     int padding = input[*len - 1];
     *len -= padding;
 }
 
+// Function to decrypt the message using the given key
 void decrypt_message(long key, unsigned char *ciph, int *len) {
     DES_cblock keyBlock;
     DES_key_schedule schedule;
 
+    // Convert the key to a DES key block
     for (int i = 0; i < 8; ++i) {
         keyBlock[i] = (key >> (i * 8)) & 0xFF;
     }
@@ -30,16 +34,19 @@ void decrypt_message(long key, unsigned char *ciph, int *len) {
     DES_set_odd_parity(&keyBlock);
     DES_set_key_checked(&keyBlock, &schedule);
 
+    // Decrypt the cipher text in 8-byte blocks
     for (int i = 0; i < *len; i += 8) {
         DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &schedule, DES_DECRYPT);
     }
-    remove_padding(ciph, len);
+    remove_padding(ciph, len); // Remove padding after decryption
 }
 
+// Function to encrypt the message using the given key
 void encrypt_message(long key, unsigned char *ciph, int *len) {
     DES_cblock keyBlock;
     DES_key_schedule schedule;
 
+    // Convert the key to a DES key block
     for (int i = 0; i < 8; ++i) {
         keyBlock[i] = (key >> (i * 8)) & 0xFF;
     }
@@ -47,13 +54,15 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
     DES_set_odd_parity(&keyBlock);
     DES_set_key_checked(&keyBlock, &schedule);
 
-    add_padding(ciph, len);
+    add_padding(ciph, len); // Add padding before encryption
 
+    // Encrypt the message in 8-byte blocks
     for (int i = 0; i < *len; i += 8) {
         DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &schedule, DES_ENCRYPT);
     }
 }
 
+// Function to try a specific key to see if it successfully decrypts the cipher to a string containing the search term
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
@@ -66,6 +75,7 @@ int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     return 0; // Key not found
 }
 
+// Parallel key search function that uses both MPI and OpenMP for distributed parallelism
 int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int ciphlen, const char *search, int *key_found, long *found, int id, MPI_Comm comm, int N) {
     #pragma omp parallel shared(key_found, found)
     {
@@ -76,7 +86,7 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
 
         // Each thread will run this loop while key_found is false
         for (long i = mylower + thread_id; i <= myupper; i += num_threads) {
-            printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
+            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
 
             if (!(*key_found) && tryKey(i, cipher, ciphlen, search)) {
                 #pragma omp critical
@@ -91,16 +101,11 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
                 }
                 break;
             }
-            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
-            // if (thread_who_found!=0){
-            //     printf("Thread %d found the key, process %d\n", thread_who_found, id);
-            // }
+
             // Check for a message from other processes indicating that the key is found
             int flag;
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
-            // if (i%1000000 == 0){
-            //     printf("Process %d, thread %d: flag %d\n", id, thread_id, flag);
-            // }
+
             if (flag) {
                 MPI_Bcast(key_found, 1, MPI_INT, id, comm);
                 MPI_Recv(key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
@@ -108,6 +113,7 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
                     break; // Break if key_found was updated
                 }
             }
+
             // Check if the key has already been found
             if (*key_found) {
                 break; // Exit the loop if the key has been found
@@ -118,6 +124,7 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
 }
 
 int main(int argc, char *argv[]) {
+    // Check for correct usage of the program
     if (argc != 4) {
         fprintf(stderr, "Usage: %s <file> <key> <search_string>\n", argv[0]);
         return EXIT_FAILURE;
@@ -156,6 +163,7 @@ int main(int argc, char *argv[]) {
     // Encrypt the message with the provided key
     encrypt_message(key, cipher, &ciphlen);
 
+    // Calculate the key range for each process
     long upper = (1L << 56);
     long mylower = (upper / N) * id;
     long myupper = (upper / N) * (id + 1) - 1;
@@ -170,6 +178,7 @@ int main(int argc, char *argv[]) {
     // Call the parallel key search function
     parallel_key_search(mylower, myupper, cipher, ciphlen, search, &key_found, &found, id, comm, N);
 
+    // If the key was found, decrypt the message and print it
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
         printf("Key found: %li by process %d\n", found, id);
@@ -179,6 +188,7 @@ int main(int argc, char *argv[]) {
         printf("Decryption time: %f seconds\n", end_time - start_time);
     }
 
+    // Free allocated memory and finalize MPI
     free(plaintext);
     free(cipher);
     MPI_Finalize();
