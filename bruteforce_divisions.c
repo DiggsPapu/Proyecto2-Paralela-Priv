@@ -1,4 +1,26 @@
 #include <openssl/des.h>
+#include <mpi.h>
+
+int main(int argc, char *argv[]) {
+    int N, id;
+    MPI_Comm comm = MPI_COMM_WORLD;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(comm, &N);
+    MPI_Comm_rank(comm, &id);
+
+    long upper = (1L << 56);
+    long mylower = (upper / N) * id;
+    long myupper = (upper / N) * (id + 1) - 1;
+
+    if (id == N - 1) {
+        myupper = upper;
+    }
+
+    printf("Process %d is responsible for key range: [%li - %li]\n", id, mylower, myupper);
+    MPI_Finalize();
+    return 0;
+}
+
 
 void add_padding(unsigned char *input, int *len) {
     int padding = 8 - (*len % 8);
