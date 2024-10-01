@@ -8,6 +8,26 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(comm, &N);
     MPI_Comm_rank(comm, &id);
 
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Could not open the file");
+        MPI_Finalize();
+        return EXIT_FAILURE;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long filesize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    unsigned char *plaintext = malloc(filesize);
+    fread(plaintext, 1, filesize, file);
+    fclose(file);
+
+    unsigned char *cipher = malloc(filesize + 8); // +8 for padding
+    int ciphlen = filesize;
+    memcpy(cipher, plaintext, ciphlen);
+
+    encrypt_message(key, cipher, &ciphlen);
+
     long upper = (1L << 56);
     long mylower = (upper / N) * id;
     long myupper = (upper / N) * (id + 1) - 1;
