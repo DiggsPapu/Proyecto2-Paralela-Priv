@@ -47,6 +47,25 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Process %d is responsible for key range: [%li - %li]\n", id, mylower, myupper);
+
+    for (long i = 0; ; i++) {
+        for (int j = 0; j < divisions; j++) {
+            long candidate;
+            if (i % 2 == 0) {
+                candidate = ranges[j][0] + i / 2;
+            } else {
+                candidate = ranges[j][1] - i / 2;
+            }
+            if (candidate < ranges[j][0] || candidate > ranges[j][1]) continue;
+            if (tryKey(candidate, cipher, ciphlen, search)) {
+                found = candidate;
+                key_found = 1;
+                break;
+            }
+        }
+        if (key_found) break;
+    }
+
     MPI_Finalize();
     return 0;
 }
