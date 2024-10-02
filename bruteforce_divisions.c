@@ -2,6 +2,16 @@
 #include <mpi.h>
 
 int main(int argc, char *argv[]) {
+
+    int divisions = atoi(argv[4]);
+    long range_per_division = (myupper - mylower + 1) / divisions;
+    long ranges[divisions][2];
+
+    for (int i = 0; i < divisions; i++) {
+        ranges[i][0] = mylower + i * range_per_division;
+        ranges[i][1] = (i == divisions - 1) ? myupper : ranges[i][0] + range_per_division - 1;
+    }
+
     int N, id;
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Init(&argc, &argv);
