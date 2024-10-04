@@ -78,6 +78,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    if (found != -1) {
+        double end_time = MPI_Wtime();
+        printf("Key found: %li by process %d\n", found, id);
+        decrypt_message(found, cipher, &ciphlen);
+        cipher[ciphlen] = '\0';
+        printf("Decrypted text: %s\n", cipher);
+        printf("Decryption time: %f seconds\n", end_time - start_time);
+    }
+
 
     MPI_Finalize();
     return 0;
