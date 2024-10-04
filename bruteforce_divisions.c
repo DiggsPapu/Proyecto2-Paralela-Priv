@@ -66,6 +66,19 @@ int main(int argc, char *argv[]) {
         if (key_found) break;
     }
 
+    int key_found = 0;
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
+    if (flag) {
+        MPI_Recv(&key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+        if (key_found) break;
+    }
+    if (found != -1) {
+        for (int j = 0; j < N; ++j) {
+            MPI_Send(&key_found, 1, MPI_INT, j, 0, comm);
+        }
+    }
+
+
     MPI_Finalize();
     return 0;
 }
