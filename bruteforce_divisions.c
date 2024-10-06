@@ -88,8 +88,11 @@ int main(int argc, char *argv[]) {
     }
 
 
+    free(plaintext);
+    free(cipher);
     MPI_Finalize();
-    return 0;
+    return EXIT_SUCCESS;
+
 }
 
 
