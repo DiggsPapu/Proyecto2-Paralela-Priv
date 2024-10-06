@@ -1,0 +1,22 @@
+# Define the compiler and the executable name
+CC = mpicc
+TARGET = bruteforce-divisions
+SRC = bruteforce-divisions.c
+
+# Default rule to compile the code
+all: $(TARGET)
+
+# Compile the mpi_hello.c file into an executable
+$(TARGET): $(SRC)
+	$(CC) -o $(TARGET) $(SRC)  -lssl -lcrypto
+
+# Rule to run the executable with 4 processes
+run: $(TARGET)
+	mpirun --allow-run-as-root -n 4 ./bruteforce-divisions textoACifrar.txt 36028798018963968L "es una prueba de" 1000
+
+# Clean the directory by removing the compiled executable
+clean:
+	rm -f $(TARGET)
+
+# Phony targets
+.PHONY: all run clean
