@@ -12,7 +12,7 @@ $(TARGET): $(SRC)
 
 # Rule to run the executable with 4 processes
 run: $(TARGET)
-	mpiexec --allow-run-as-root -n 4 ./$(TARGET)
+	mpiexec --allow-run-as-root -np 4 ./$(TARGET)
 
 # Clean the directory by removing the compiled executable
 clean:
