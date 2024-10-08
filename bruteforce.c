@@ -45,7 +45,27 @@ int tryKey(long key, char *ciph, int len){
 
 unsigned char cipher[] = {108, 245, 65, 63, 125, 200, 150, 66, 17, 170, 207, 170, 34, 31, 70, 215, 0};
 int main(int argc, char *argv[]){ //char **argv
-    char plain_text[] = "Esta es una prueba de proyecto 2";
+
+    FILE *file = fopen("textoACifrar.txt", "r");
+    if (!file) {
+        perror("Error opening file");
+        return 1;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *plain_text = malloc(file_size + 1);
+    if (!plain_text) {
+        perror("Memory allocation error");
+        fclose(file);
+        return 1;
+    }
+
+    fread(plain_text, 1, file_size, file);
+    plain_text[file_size] = '\0';
+    fclose(file);
     int plain_text_len = strlen(plain_text);
     char cipher[plain_text_len + 1];
     memcpy(cipher, plain_text, plain_text_len + 1);
@@ -61,7 +81,7 @@ int main(int argc, char *argv[]){ //char **argv
         printf("%02x ", (unsigned char)cipher[i]);
     }
     printf("\n");
-
+    strcpy(search, "es una prueba de");
     int N, id;
     long upper = (1L <<56); //upper bound DES keys 2^56
     long mylower, myupper;
