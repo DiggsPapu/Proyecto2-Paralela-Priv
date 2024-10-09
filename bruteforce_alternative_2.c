@@ -66,6 +66,49 @@ int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     return 0; // Key not found
 }
 
+int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int ciphlen, const char *search, int *key_found, long *found, int id, MPI_Comm comm, int N, int flag) {
+    #pragma omp parallel shared(key_found, found)
+    {
+        int thread_id = omp_get_thread_num(); // Get the current thread ID
+        int num_threads = omp_get_num_threads(); // Total number of threads
+        // printf("Process %d, num_threads: %d\n",id, num_threads);
+        long i;
+
+        // Each thread will run this loop while key_found is false
+        for (long i = mylower + thread_id; i <= myupper; i += num_threads) {
+            // Check if the key has already been found
+            if (*key_found) {
+                break; // Exit the loop if the key has been found
+            }
+
+            // Check for a message from other processes indicating that the key is found
+            int flag;
+            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
+            if (flag) {
+                MPI_Recv(key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+            }
+            
+            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
+
+            if (!(*key_found) && tryKey(i, cipher, ciphlen, search)) {
+                #pragma omp critical
+                {
+                    if (!(*key_found)) { // Check again inside the critical section to avoid race conditions
+                        printf("Key found: %li by process %d\n", i, id);
+                        *found = i; // Key found
+                        *key_found = 1; // Set the shared key_found flag
+                        #pragma omp flush(key_found)
+                        for (int j = 0; j < N; ++j) {
+                            MPI_Send(key_found, 1, MPI_INT, j, 0, comm); // Inform all processes
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return *key_found; // Return whether the key was found
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 4) {
         fprintf(stderr, "Usage: %s <file> <key> <search_string>\n", argv[0]);
@@ -76,9 +119,10 @@ int main(int argc, char *argv[]) {
     long key = atol(argv[2]);
     char *search = argv[3];
 
-    int N, id;
+    int N, id, flag;
     MPI_Comm comm = MPI_COMM_WORLD;
-    MPI_Init(&argc, &argv);
+    int required = MPI_THREAD_MULTIPLE, provided;
+    MPI_Init_thread(&argc, &argv, required, &provided);
     MPI_Comm_size(comm, &N);
     MPI_Comm_rank(comm, &id);
 
@@ -110,28 +154,13 @@ int main(int argc, char *argv[]) {
     if (id == N - 1) {
         myupper = upper;
     }
-
+    printf("Process %d is responsible for key range: [%li - %li]\n", id, mylower, myupper);
     long found = -1; // Initialize as -1 to indicate that no key has been found
     int key_found = 0; // Flag to indicate if the key is found
     double start_time = MPI_Wtime(); // Start timing
 
-    // Loop to search for the key
-    #pragma omp parallel for shared(key_found, found) private(i)
-    for (long i = mylower; i <= myupper; ++i) {
-        // Check if a key has already been found
-        if (key_found) continue;
-
-        if (tryKey(i, cipher, ciphlen, search)) {
-            #pragma omp critical
-            {
-                found = i; // Key found
-                key_found = 1; // Set the key_found flag
-            }
-        }
-    }
-
-    // Broadcast found key to all processes
-    MPI_Bcast(&found, 1, MPI_LONG, MPI_ROOT, comm);
+    // Call the parallel key search function
+    parallel_key_search(mylower, myupper, cipher, ciphlen, search, &key_found, &found, id, comm, N, flag);
 
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing

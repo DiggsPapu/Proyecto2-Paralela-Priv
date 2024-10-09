@@ -12,7 +12,7 @@ $(TARGET): $(SRC)
 
 # Rule to run the executable with 4 processes
 run: $(TARGET)
-	mpirun --allow-run-as-root -np 4 ./$(TARGET) textoACifrar.txt 18014398509481983L "es una prueba de"
+	mpirun --allow-run-as-root -np 4 ./$(TARGET) textoACifrar.txt 123456789 "es una prueba de"
 
 # Clean the directory by removing the compiled executable
 clean:
