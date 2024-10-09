@@ -107,19 +107,27 @@ int main(int argc, char *argv[]) {
         myupper = upper;
     }
 
+    // Print the key range for each process
+    printf("Process %d: key range [%ld, %ld]\n", id, mylower, myupper);
+
     long found = -1; // Initialize as -1 to indicate that no key has been found
+    long found_by_process = -1;
     double start_time = MPI_Wtime(); // Start timing
 
     // Loop to search for the key
-    for (long i = mylower; i < myupper; ++i) {
+    for (long i = mylower; i <= myupper; ++i) {
         // Check if a key has already been found
         MPI_Bcast(&found, 1, MPI_LONG, 0, comm);
         if (found != -1) {
             break; // Exit if a key has already been found
         }
 
+        // Ensure only one process prints the key being checked
+        printf("Process %d checking key: %ld\n", id, i); // Print key being checked
+
         if (tryKey(i, cipher, ciphlen, search)) {
             found = i;
+            found_by_process = id;
             // Inform all other processes that the key has been found
             MPI_Bcast(&found, 1, MPI_LONG, id, comm); // Broadcast the found key
             break;
@@ -128,16 +136,14 @@ int main(int argc, char *argv[]) {
 
     // If the key has been found, all processes should now stop searching
     MPI_Bcast(&found, 1, MPI_LONG, 0, comm); // Broadcast the result to all processes
-
+    MPI_Bcast(&found_by_process, 1, MPI_LONG, 0, comm); // Broadcast the process ID that found the key
     // Only the process that found the key should print it
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
-        if (id == 0) {
-            printf("Key found: %li\n", found);
-            decrypt_message(found, cipher, &ciphlen);
-            printf("Decrypted text: %s\n", cipher);
-            printf("Decryption time: %f seconds\n", end_time - start_time);
-        }
+        printf("Process %d-> Key found by process %d: %li\n", id, found_by_process, found);
+        decrypt_message(found, cipher, &ciphlen);
+        printf("Decrypted text: %s\n", cipher);
+        printf("Decryption time: %f seconds\n", end_time - start_time);
     }
 
     free(plaintext);
