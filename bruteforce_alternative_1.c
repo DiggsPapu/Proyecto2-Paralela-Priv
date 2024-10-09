@@ -54,15 +54,16 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
 }
 
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
-    if (key == 18014398509481984){
-        printf("Checking key: %ld\n", key);
-    }
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
     temp[len] = 0;
 
     decrypt_message(key, temp, &len);
-    return strstr((char *)temp, search) != NULL;
+    if (strstr((char *)temp, search) != NULL) {
+        printf("Key found: %ld\n", key);
+        return 1; // Key found
+    }
+    return 0; // Key not found
 }
 
 int main(int argc, char *argv[]) {
@@ -110,42 +111,32 @@ int main(int argc, char *argv[]) {
         myupper = upper;
     }
 
-    // Print the key range for each process
-    printf("Process %d: key range [%ld, %ld]\n", id, mylower, myupper);
-
     long found = -1; // Initialize as -1 to indicate that no key has been found
-    long found_by_process = -1;
+    int key_found = 0; // Flag to indicate if the key is found
     double start_time = MPI_Wtime(); // Start timing
 
     // Loop to search for the key
     for (long i = mylower; i <= myupper; ++i) {
         // Check if a key has already been found
-        MPI_Bcast(&found, 1, MPI_LONG, 0, comm);
-        if (found != -1) {
+        MPI_Bcast(&key_found, 1, MPI_INT, 0, comm);
+        if (key_found) {
             break; // Exit if a key has already been found
         }
-        if (id == 1 && i == 18014398509481984){
-            printf("Process %d checking key: %ld\n", id, i); // Print key being checked
-        }
-        // Ensure only one process prints the key being checked
-        // printf("Process %d checking key: %ld\n", id, i); // Print key being checked
 
         if (tryKey(i, cipher, ciphlen, search)) {
-            found = i;
-            found_by_process = id;
+            found = i; // Key found
+            key_found = 1; // Set the key_found flag
             // Inform all other processes that the key has been found
-            MPI_Bcast(&found, 1, MPI_LONG, id, comm); // Broadcast the found key
+            MPI_Bcast(&key_found, 1, MPI_INT, MPI_ROOT, comm); // Broadcast the found key
             break;
         }
     }
 
     // If the key has been found, all processes should now stop searching
     MPI_Bcast(&found, 1, MPI_LONG, 0, comm); // Broadcast the result to all processes
-    MPI_Bcast(&found_by_process, 1, MPI_LONG, 0, comm); // Broadcast the process ID that found the key
-    // Only the process that found the key should print it
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
-        printf("Process %d-> Key found by process %d: %li\n", id, found_by_process, found);
+        printf("Key found: %li\n", found);
         decrypt_message(found, cipher, &ciphlen);
         printf("Decrypted text: %s\n", cipher);
         printf("Decryption time: %f seconds\n", end_time - start_time);
