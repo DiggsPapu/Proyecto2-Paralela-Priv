@@ -60,7 +60,6 @@ int tryKey(long key, unsigned char *ciph, int len, const char *search) {
 
     decrypt_message(key, temp, &len);
     if (strstr((char *)temp, search) != NULL) {
-        printf("Key found: %ld\n", key);
         return 1; // Key found
     }
     return 0; // Key not found
@@ -76,7 +75,7 @@ int main(int argc, char *argv[]) {
     long key = atol(argv[2]);
     char *search = argv[3];
 
-    int N, id;
+    int N, id, flag;
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(comm, &N);
@@ -117,26 +116,27 @@ int main(int argc, char *argv[]) {
 
     // Loop to search for the key
     for (long i = mylower; i <= myupper; ++i) {
-        // Check if a key has already been found
-        MPI_Bcast(&key_found, 1, MPI_INT, 0, comm);
-        if (key_found) {
-            break; // Exit if a key has already been found
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
+        if (flag) { // Check if a key has been found
+            MPI_Recv(&key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+            if (key_found) {
+                break; // Exit if a key has already been found
+            }
         }
 
         if (tryKey(i, cipher, ciphlen, search)) {
             found = i; // Key found
             key_found = 1; // Set the key_found flag
-            // Inform all other processes that the key has been found
-            MPI_Bcast(&key_found, 1, MPI_INT, MPI_ROOT, comm); // Broadcast the found key
+            for (int j = 0; j < N; ++j) {
+                MPI_Send(&key_found, 1, MPI_INT, j, 0, comm); // Inform all processes
+            }
             break;
         }
     }
 
-    // If the key has been found, all processes should now stop searching
-    MPI_Bcast(&found, 1, MPI_LONG, 0, comm); // Broadcast the result to all processes
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
-        printf("Key found: %li\n", found);
+        printf("Key found: %li by process %d\n", found, id);
         decrypt_message(found, cipher, &ciphlen);
         printf("Decrypted text: %s\n", cipher);
         printf("Decryption time: %f seconds\n", end_time - start_time);
