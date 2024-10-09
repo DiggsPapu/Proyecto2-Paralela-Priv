@@ -76,7 +76,7 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
 
         // Each thread will run this loop while key_found is false
         for (long i = mylower + thread_id; i <= myupper; i += num_threads) {
-            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
+            printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
 
             if (!(*key_found) && tryKey(i, cipher, ciphlen, search)) {
                 #pragma omp critical
@@ -86,20 +86,23 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
                     *key_found = 1; // Set the shared key_found flag
                     printf("Key found: %li by process %d in thread %d, keyfound %d, %d \n", i, id, thread_id, *key_found, thread_who_found);
                 }
-
-                // Inform all processes that the key has been found
-                MPI_Bcast(key_found, 1, MPI_INT, id, comm);
+                for (int j = 0; j < N; ++j) {
+                    MPI_Send(&key_found, 1, MPI_INT, j, 0, comm); // Inform all processes
+                }
+                break;
             }
-            if (thread_who_found!=0){
-                printf("Thread %d found the key, process %d\n", thread_who_found, id);
-            }
+            // printf("Process %d, thread %d: trying the key -> %ld\n", id, thread_id, i);
+            // if (thread_who_found!=0){
+            //     printf("Thread %d found the key, process %d\n", thread_who_found, id);
+            // }
             // Check for a message from other processes indicating that the key is found
             int flag;
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &flag, MPI_STATUS_IGNORE);
-            if (i%1000000 == 0){
-                printf("Process %d, thread %d: flag %d\n", id, thread_id, flag);
-            }
+            // if (i%1000000 == 0){
+            //     printf("Process %d, thread %d: flag %d\n", id, thread_id, flag);
+            // }
             if (flag) {
+                MPI_Bcast(key_found, 1, MPI_INT, id, comm);
                 MPI_Recv(key_found, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
                 if (*key_found) {
                     break; // Break if key_found was updated
