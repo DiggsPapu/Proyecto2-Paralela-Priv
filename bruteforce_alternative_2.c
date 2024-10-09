@@ -57,7 +57,7 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
-    temp[len] = 0;
+    temp[len] = 0; // Ensure the string is null-terminated
 
     decrypt_message(key, temp, &len);
     if (strstr((char *)temp, search) != NULL) {
@@ -66,7 +66,7 @@ int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     return 0; // Key not found
 }
 
-int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int ciphlen, const char *search, int *key_found, long *found, int id, MPI_Comm comm, int N, int flag) {
+int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int ciphlen, const char *search, int *key_found, long *found, int id, MPI_Comm comm, int N) {
     #pragma omp parallel shared(key_found, found)
     {
         int thread_id = omp_get_thread_num(); // Get the current thread ID
@@ -94,7 +94,7 @@ int parallel_key_search(long mylower, long myupper, unsigned char *cipher, int c
                 #pragma omp critical
                 {
                     if (!(*key_found)) { // Check again inside the critical section to avoid race conditions
-                        printf("Key found: %li by process %d\n", i, id);
+                        printf("Key found: %li by process %d in thread %d\n", i, id, thread_id);
                         *found = i; // Key found
                         *key_found = 1; // Set the shared key_found flag
                         #pragma omp flush(key_found)
@@ -160,12 +160,13 @@ int main(int argc, char *argv[]) {
     double start_time = MPI_Wtime(); // Start timing
 
     // Call the parallel key search function
-    parallel_key_search(mylower, myupper, cipher, ciphlen, search, &key_found, &found, id, comm, N, flag);
+    parallel_key_search(mylower, myupper, cipher, ciphlen, search, &key_found, &found, id, comm, N);
 
     if (found != -1) {
         double end_time = MPI_Wtime(); // End timing
         printf("Key found: %li by process %d\n", found, id);
         decrypt_message(found, cipher, &ciphlen);
+        cipher[ciphlen] = '\0'; // Ensure null-terminated string
         printf("Decrypted text: %s\n", cipher);
         printf("Decryption time: %f seconds\n", end_time - start_time);
     }

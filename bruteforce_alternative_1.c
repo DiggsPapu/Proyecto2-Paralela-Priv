@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
     if (id == N - 1) {
         myupper = upper;
     }
-
+    printf("Process %d is responsible for key range: [%li - %li]\n", id, mylower, myupper);
     long found = -1; // Initialize as -1 to indicate that no key has been found
     int key_found = 0; // Flag to indicate if the key is found
     double start_time = MPI_Wtime(); // Start timing
