@@ -54,6 +54,9 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
 }
 
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
+    if (key == 18014398509481984){
+        printf("Checking key: %ld\n", key);
+    }
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
     temp[len] = 0;
@@ -121,9 +124,11 @@ int main(int argc, char *argv[]) {
         if (found != -1) {
             break; // Exit if a key has already been found
         }
-
+        if (id == 1 && i == 18014398509481984){
+            printf("Process %d checking key: %ld\n", id, i); // Print key being checked
+        }
         // Ensure only one process prints the key being checked
-        printf("Process %d checking key: %ld\n", id, i); // Print key being checked
+        // printf("Process %d checking key: %ld\n", id, i); // Print key being checked
 
         if (tryKey(i, cipher, ciphlen, search)) {
             found = i;
