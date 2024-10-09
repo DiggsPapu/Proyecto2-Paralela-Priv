@@ -56,9 +56,11 @@ void encrypt_message(long key, unsigned char *ciph, int *len) {
 int tryKey(long key, unsigned char *ciph, int len, const char *search) {
     unsigned char temp[len + 1];
     memcpy(temp, ciph, len);
-    temp[len] = 0;
+    temp[len] = 0; // Ensure the string is null-terminated
 
     decrypt_message(key, temp, &len);
+    temp[len] = '\0'; // Explicitly null-terminate the decrypted string
+
     if (strstr((char *)temp, search) != NULL) {
         return 1; // Key found
     }
@@ -138,6 +140,7 @@ int main(int argc, char *argv[]) {
         double end_time = MPI_Wtime(); // End timing
         printf("Key found: %li by process %d\n", found, id);
         decrypt_message(found, cipher, &ciphlen);
+        cipher[ciphlen] = '\0'; // Ensure null-terminated string
         printf("Decrypted text: %s\n", cipher);
         printf("Decryption time: %f seconds\n", end_time - start_time);
     }
