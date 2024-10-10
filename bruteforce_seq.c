@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <openssl/des.h> 
+#include <time.h>  // Para medir el tiempo de ejecución
 
 void decrypt(long key, char *ciph, int len) {
     
@@ -45,6 +46,9 @@ int main() {
     int ciphlen = strlen((const char *)cipher);
     long found = 0;
 
+    // Medición del tiempo de inicio
+    clock_t start_time = clock();
+
     for (long i = 0; i < upper; ++i) {
         if (tryKey(i, (char *)cipher, ciphlen)) {
             found = i;
@@ -52,12 +56,19 @@ int main() {
         }
     }
 
+    // Medición del tiempo final
+    clock_t end_time = clock();
+    double time_spent = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+
     if (found) {
         decrypt(found, (char *)cipher, ciphlen);
         printf("Key found: %li, Decrypted text: %s\n", found, cipher);
     } else {
         printf("Key not found.\n");
     }
+
+    // Imprimir el tiempo transcurrido
+    printf("Time taken: %.2f seconds\n", time_spent);
 
     return 0;
 }
